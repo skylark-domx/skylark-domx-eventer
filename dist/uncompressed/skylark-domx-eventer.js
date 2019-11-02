@@ -770,9 +770,9 @@ define('skylark-domx-eventer/eventer',[
     return skylark.attach("domx.eventer",eventer);
 });
 define('skylark-domx-eventer/main',[
-	"./eventer",
-	"skylark-domx-velm",
-	"skylark-domx-query"		
+    "./eventer",
+    "skylark-domx-velm",
+    "skylark-domx-query"        
 ],function(eventer,velm,$){
 
     // from ./eventer
@@ -791,7 +791,7 @@ define('skylark-domx-eventer/main',[
 
         var method = event;
 
-        VisualElement.prototype[method ] = function ( callback ) {
+        velm.VisualElement.prototype[method ] = function ( callback ) {
 
             this.on( event.toLowerCase(), callback);
 
@@ -833,7 +833,7 @@ define('skylark-domx-eventer/main',[
 
     $.ready = eventer.ready;
 
-	return eventer;
+    return eventer;
 });
 define('skylark-domx-eventer', ['skylark-domx-eventer/main'], function (main) { return main; });
 

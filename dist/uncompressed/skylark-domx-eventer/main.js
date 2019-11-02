@@ -1,7 +1,7 @@
 define([
-	"./eventer",
-	"skylark-domx-velm",
-	"skylark-domx-query"		
+    "./eventer",
+    "skylark-domx-velm",
+    "skylark-domx-query"        
 ],function(eventer,velm,$){
 
     // from ./eventer
@@ -20,7 +20,7 @@ define([
 
         var method = event;
 
-        VisualElement.prototype[method ] = function ( callback ) {
+        velm.VisualElement.prototype[method ] = function ( callback ) {
 
             this.on( event.toLowerCase(), callback);
 
@@ -62,5 +62,5 @@ define([
 
     $.ready = eventer.ready;
 
-	return eventer;
+    return eventer;
 });
