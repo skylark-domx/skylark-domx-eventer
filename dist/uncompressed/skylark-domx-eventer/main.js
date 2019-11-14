@@ -1,8 +1,9 @@
 define([
+    "skylark-langx/langx",
     "./eventer",
     "skylark-domx-velm",
     "skylark-domx-query"        
-],function(eventer,velm,$){
+],function(langx,eventer,velm,$){
 
     // from ./eventer
     velm.delegate([

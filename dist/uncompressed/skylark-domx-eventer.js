@@ -770,10 +770,11 @@ define('skylark-domx-eventer/eventer',[
     return skylark.attach("domx.eventer",eventer);
 });
 define('skylark-domx-eventer/main',[
+    "skylark-langx/langx",
     "./eventer",
     "skylark-domx-velm",
     "skylark-domx-query"        
-],function(eventer,velm,$){
+],function(langx,eventer,velm,$){
 
     // from ./eventer
     velm.delegate([
