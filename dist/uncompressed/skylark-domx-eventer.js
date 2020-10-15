@@ -75,7 +75,7 @@
   factory(define,require);
 
   if (!isAmd) {
-    var skylarkjs = require("skylark-langx/skylark");
+    var skylarkjs = require("skylark-langx-ns");
 
     if (isCmd) {
       module.exports = skylarkjs;
@@ -132,6 +132,9 @@ define('skylark-domx-eventer/eventer',[
         };
     }
 
+    function isHandler(callback) {
+        return callback && (langx.isFunction(callback) || langx.isFunction(callback.handleEvent));
+    }
 
     var NativeEventCtors = [
             window["CustomEvent"], // 0 default
@@ -357,7 +360,12 @@ define('skylark-domx-eventer/eventer',[
                                 self.remove(fn, options);
                             }
 
-                            var result = fn.apply(match, args);
+                            var result ;
+                            if (fn.handleEvent) {
+                                result = fn.handleEvent.apply(fn,args);
+                            } else {
+                                result = fn.apply(match, args);
+                            }
 
                             if (result === false) {
                                 e.preventDefault();
@@ -493,7 +501,7 @@ define('skylark-domx-eventer/eventer',[
             return $this;
         }
 
-        if (!langx.isString(selector) && !langx.isFunction(callback) && callback !== false) {
+        if (!langx.isString(selector) && !isHandler(callback) && callback !== false) {
             callback = selector;
             selector = undefined;
         }
@@ -540,13 +548,13 @@ define('skylark-domx-eventer/eventer',[
             return this;
         }
 
-        if (!langx.isString(selector) && !langx.isFunction(callback)) {
+        if (!langx.isString(selector) && !isHandler(callback)) {
             callback = data;
             data = selector;
             selector = undefined;
         }
 
-        if (langx.isFunction(data)) {
+        if (isHandler(data)) {
             callback = data;
             data = undefined;
         }
