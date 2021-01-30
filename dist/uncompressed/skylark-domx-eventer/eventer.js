@@ -230,6 +230,8 @@ define([
                             args = [e];
                         }
 
+                        e.type = self._event; // convert realEvent to listened event
+
                         langx.each(bindings, function(idx, binding) {
                             var match = elm;
                             if (e.isImmediatePropagationStopped && e.isImmediatePropagationStopped()) {
