@@ -37,11 +37,18 @@ define([
     }
 
     function parse(event) {
-        var segs = ("" + event).split(".");
-        return {
-            type: segs[0],
-            ns: segs.slice(1).sort().join(" ")
-        };
+        if (event) {
+            var segs = ("" + event).split(".");
+            return {
+                type: segs[0],
+                ns: segs.slice(1).sort().join(" ")
+            };
+        } else {
+            return {
+                type : null,
+                ns : null
+            }
+        }
     }
 
     function isHandler(callback) {
@@ -399,6 +406,19 @@ define([
             return handler;
         };
 
+
+    /*   
+     * Remove all event handlers from the specified element.
+     * @param {HTMLElement} elm  
+     */
+    function clear(elm) {
+        var handler = findHandler(elm);
+
+        handler.unregister();
+
+        return this;
+    }
+
     /*   
      * Remove an event handler for one or more events from the specified element.
      * @param {HTMLElement} elm  
@@ -668,6 +688,8 @@ define([
 
     langx.mixin(eventer, {
         NativeEvents : NativeEvents,
+        
+        clear,
         
         create: createEvent,
 
