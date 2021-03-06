@@ -285,7 +285,11 @@ define([
                             if (fn.handleEvent) {
                                 result = fn.handleEvent.apply(fn,args);
                             } else {
-                                result = fn.apply(match, args);
+                                if (options.ctx) {
+                                    result = fn.apply(options.ctx, args);                                   
+                                } else {
+                                    result = fn.apply(match, args);                                   
+                                }
                             }
 
                             if (result === false) {
@@ -472,7 +476,7 @@ define([
      * @param {Function} callback
      * @param {Boolean　Optional} one
      */
-    function on(elm, events, selector, data, callback, one) {
+    function on(elm, events, selector, data, callback, ctx,one) {
 
         var autoRemove, delegator;
         if (langx.isPlainObject(events)) {
@@ -483,16 +487,24 @@ define([
         }
 
         if (!langx.isString(selector) && !isHandler(callback)) {
+            one = ctx;
+            ctx = callback;
             callback = data;
             data = selector;
             selector = undefined;
         }
 
         if (isHandler(data)) {
+            one = ctx;
+            ctx = callback;
             callback = data;
             data = undefined;
         }
 
+        if (langx.isBoolean(ctx)) {
+            one = ctx;
+            ctx = undefined;
+        }
         if (callback === false) {
             callback = langx.returnFalse;
         }
@@ -514,6 +526,7 @@ define([
             handler.register(event, callback, {
                 data: data,
                 selector: selector,
+                ctx : ctx,
                 one: !!one
             });
         });
