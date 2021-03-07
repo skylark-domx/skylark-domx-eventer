@@ -101,12 +101,14 @@ define([
             "selectionchange": 3, // Event
             "submit": 3, // Event
             "reset": 3, // Event
+            'fullscreenchange':3,
+            'fullscreenerror':3,
 
+/*
+            'disablepictureinpicturechanged':3,
             'ended':3,
             'enterpictureinpicture':3,
             'durationchange':3,
-            'fullscreenchange':3,
-            'fullscreenerror':3,
             'leavepictureinpicture':3,
             'loadstart' : 3,
             'loadedmetadata':3,
@@ -122,6 +124,7 @@ define([
             'timeupdate':3,
             'volumechange':3,
             'waiting' : 3,
+*/
 
 
             "focus": 4, // FocusEvent
