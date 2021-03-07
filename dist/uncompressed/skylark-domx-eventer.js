@@ -125,11 +125,18 @@ define('skylark-domx-eventer/eventer',[
     }
 
     function parse(event) {
-        var segs = ("" + event).split(".");
-        return {
-            type: segs[0],
-            ns: segs.slice(1).sort().join(" ")
-        };
+        if (event) {
+            var segs = ("" + event).split(".");
+            return {
+                type: segs[0],
+                ns: segs.slice(1).sort().join(" ")
+            };
+        } else {
+            return {
+                type : null,
+                ns : null
+            }
+        }
     }
 
     function isHandler(callback) {
@@ -182,6 +189,31 @@ define('skylark-domx-eventer/eventer',[
             "selectionchange": 3, // Event
             "submit": 3, // Event
             "reset": 3, // Event
+            'fullscreenchange':3,
+            'fullscreenerror':3,
+
+/*
+            'disablepictureinpicturechanged':3,
+            'ended':3,
+            'enterpictureinpicture':3,
+            'durationchange':3,
+            'leavepictureinpicture':3,
+            'loadstart' : 3,
+            'loadedmetadata':3,
+            'pause' : 3,
+            'play':3,
+            'posterchange':3,
+            'ratechange':3,
+            'seeking' : 3,
+            'sourceset':3,
+            'suspend':3,
+            'textdata':3,
+            'texttrackchange':3,
+            'timeupdate':3,
+            'volumechange':3,
+            'waiting' : 3,
+*/
+
 
             "focus": 4, // FocusEvent
             "blur": 4, // FocusEvent
@@ -206,8 +238,11 @@ define('skylark-domx-eventer/eventer',[
             "mouseleave": 7, // MouseEvent
 
 
+            "progress" : 11, //ProgressEvent
+
             "textInput": 12, // TextEvent
 
+            "tap": 13,
             "touchstart": 13, // TouchEvent
             "touchmove": 13, // TouchEvent
             "touchend": 13, // TouchEvent
@@ -218,7 +253,10 @@ define('skylark-domx-eventer/eventer',[
             "scroll": 14, // UIEvent
             "unload": 14, // UIEvent,
 
-            "wheel": 15 // WheelEvent
+            "wheel": 15, // WheelEvent
+
+
+
         };
 
     //create a custom dom event
@@ -366,7 +404,11 @@ define('skylark-domx-eventer/eventer',[
                             if (fn.handleEvent) {
                                 result = fn.handleEvent.apply(fn,args);
                             } else {
-                                result = fn.apply(match, args);
+                                if (options.ctx) {
+                                    result = fn.apply(options.ctx, args);                                   
+                                } else {
+                                    result = fn.apply(match, args);                                   
+                                }
                             }
 
                             if (result === false) {
@@ -487,6 +529,19 @@ define('skylark-domx-eventer/eventer',[
             return handler;
         };
 
+
+    /*   
+     * Remove all event handlers from the specified element.
+     * @param {HTMLElement} elm  
+     */
+    function clear(elm) {
+        var handler = findHandler(elm);
+
+        handler.unregister();
+
+        return this;
+    }
+
     /*   
      * Remove an event handler for one or more events from the specified element.
      * @param {HTMLElement} elm  
@@ -540,7 +595,7 @@ define('skylark-domx-eventer/eventer',[
      * @param {Function} callback
      * @param {Boolean　Optional} one
      */
-    function on(elm, events, selector, data, callback, one) {
+    function on(elm, events, selector, data, callback, ctx,one) {
 
         var autoRemove, delegator;
         if (langx.isPlainObject(events)) {
@@ -551,16 +606,24 @@ define('skylark-domx-eventer/eventer',[
         }
 
         if (!langx.isString(selector) && !isHandler(callback)) {
+            one = ctx;
+            ctx = callback;
             callback = data;
             data = selector;
             selector = undefined;
         }
 
         if (isHandler(data)) {
+            one = ctx;
+            ctx = callback;
             callback = data;
             data = undefined;
         }
 
+        if (langx.isBoolean(ctx)) {
+            one = ctx;
+            ctx = undefined;
+        }
         if (callback === false) {
             callback = langx.returnFalse;
         }
@@ -582,6 +645,7 @@ define('skylark-domx-eventer/eventer',[
             handler.register(event, callback, {
                 data: data,
                 selector: selector,
+                ctx : ctx,
                 one: !!one
             });
         });
@@ -750,6 +814,20 @@ define('skylark-domx-eventer/eventer',[
         }        
     }
 
+    function isNativeEvent(events) {
+        if (langx.isString(events)) {
+            return !!NativeEvents[events];
+        } else if (langx.isArray(events)) {
+            for (var i=0; i<events.length; i++) {
+                if (NativeEvents[events]) {
+                    return false;
+                }
+            }
+            return events.length > 0;
+        }
+    }
+
+
     function eventer() {
         return eventer;
     }
@@ -757,9 +835,13 @@ define('skylark-domx-eventer/eventer',[
     langx.mixin(eventer, {
         NativeEvents : NativeEvents,
         
+        clear,
+        
         create: createEvent,
 
         keys: keyCodeLookup,
+
+        isNativeEvent,
 
         off: off,
 
