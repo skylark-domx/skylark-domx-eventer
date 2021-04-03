@@ -632,6 +632,24 @@ define([
         return this;
     }
 
+    var resizedQueue = [],
+        resizer = langx.loop(function(){
+            for (var i = 0; i<resizedQueue.length; i++) {
+                trigger(resizedQueue[i],"resized");
+            }
+            resizedQueue = [];
+        });
+
+    resizer.start();
+
+
+    function resized(elm) {
+        if (!resizedQueue.contains(elm)) {
+            resizedQueue.push(elm)
+        }
+
+    }
+
     var keyCodeLookup = {
         "backspace": 8,
         "comma": 188,
@@ -765,6 +783,8 @@ define([
 
         ready: ready,
 
+        resized,
+        
         shortcuts: shortcuts,
 
         special: specialEvents,
