@@ -660,8 +660,8 @@ define('skylark-domx-eventer/eventer',[
      * @param {Anything Optional} data
      * @param {Function} callback
      */
-    function one(elm, events, selector, data, callback) {
-        on(elm, events, selector, data, callback, 1);
+    function one(...args) {
+        on(...args, true);
 
         return this;
     }
