@@ -644,7 +644,7 @@ define([
 
 
     function resized(elm) {
-        if (!resizedQueue.contains(elm)) {
+        if (!resizedQueue.includes(elm)) {
             resizedQueue.push(elm)
         }
 
