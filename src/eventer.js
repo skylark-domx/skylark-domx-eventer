@@ -454,6 +454,23 @@ define([
         return this;
     }
 
+    var focusedQueue = [],
+        focuser = langx.loop(function(){
+            for (var i = 0; i<focusedQueue.length; i++) {
+                trigger(focusedQueue[i],"focused");
+            }
+            focusedQueue = [];
+        });
+
+    focuser.start();
+
+
+    function focused(elm) {
+        if (!focusedQueue.includes(elm)) {
+            focusedQueue.push(elm)
+        }
+    }
+
     /*   
      * Remove an event handler for one or more events from the specified element.
      * @param {HTMLElement} elm  
@@ -647,8 +664,8 @@ define([
         if (!resizedQueue.includes(elm)) {
             resizedQueue.push(elm)
         }
-
     }
+
 
     var keyCodeLookup = {
         "backspace": 8,
@@ -768,6 +785,8 @@ define([
         clear,
         
         create: createEvent,
+
+        focused,
 
         keys: keyCodeLookup,
 
