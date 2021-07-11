@@ -24,13 +24,13 @@
   "license": "MIT",
   "bugs": "https://github.com/skylark-domx/skylark-domx-eventer/issues",
   "dependencies": {
-    "skylark-domx-browser": "git+https://github.com/skylark-domx/skylark-domx-browser.git#master",
-    "skylark-domx-data": "git+https://github.com/skylark-domx/skylark-domx-data.git#master",
-    "skylark-domx-finder": "git+https://github.com/skylark-domx/skylark-domx-finder.git#master",
-    "skylark-domx-noder": "git+https://github.com/skylark-domx/skylark-domx-noder.git#master",
-    "skylark-domx-query": "git+https://github.com/skylark-domx/skylark-domx-query.git#master",
-    "skylark-domx-velm": "git+https://github.com/skylark-domx/skylark-domx-velm.git#master",
-    "skylark-langx": "git+https://github.com/skylark-langx/skylark-langx.git#master"
+    "skylark-domx-browser": "git+https://github.com/skylark-domx/skylark-domx-browser.git",
+    "skylark-domx-data": "git+https://github.com/skylark-domx/skylark-domx-data.git",
+    "skylark-domx-finder": "git+https://github.com/skylark-domx/skylark-domx-finder.git",
+    "skylark-domx-noder": "git+https://github.com/skylark-domx/skylark-domx-noder.git",
+    "skylark-domx-query": "git+https://github.com/skylark-domx/skylark-domx-query.git",
+    "skylark-domx-velm": "git+https://github.com/skylark-domx/skylark-domx-velm.git",
+    "skylark-langx": "git+https://github.com/skylark-langx/skylark-langx.git"
   },
   "engines": {
     "node": ">=0.8.0"
