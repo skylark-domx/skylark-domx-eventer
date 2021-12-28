@@ -1,0 +1,9 @@
+/**
+ * skylark-domx-eventer - The skylark eventer library for dom api extension.
+ * @author Hudaokeji Co.,Ltd
+ * @version v0.9.0
+ * @link www.skylarkjs.org
+ * @license MIT
+ */
+define(["skylark-langx","skylark-domx-finder","skylark-domx-noder","./eventer","./proxy"],function(e,n,t,i,r){var s="onfocusin"in window,o={focus:"focusin",blur:"focusout"},a={mouseenter:"mouseover",mouseleave:"mouseout"},d=function(e){return a[e]||s&&o[e]||e},l=e.klass({init:function(e,n){this._target=e,this._event=n,this._bindings=[]},add:function(i,s){var o=this._bindings,l={fn:i,options:e.mixin({},s)};o.push(l);var v=this;if(!v._listener){v._listener=function(i){var s=this,o=r(i),d=i._args,l=v._bindings,f=o.namespace;d=e.isDefined(d)?[o].concat(d):[o],o.type=v._event,e.each(l,function(i,r){var l=s;if(o.isImmediatePropagationStopped&&o.isImmediatePropagationStopped())return!1;var u=r.fn,c=r.options||{},p=c.selector,g=c.one,_=c.data;if(!f||f==c.ns||-1!==c.ns.indexOf(f)){if(p){if(!(l=n.closest(o.target,p))||l===s)return;e.mixin(o,{currentTarget:l,liveFired:s})}if(v._event in a){var h=o.relatedTarget;if(h&&(h===l||t.contains(l,h)))return}e.isDefined(_)&&(o.data=_),g&&v.remove(u,c),!1===(u.handleEvent?u.handleEvent.apply(u,d):c.ctx?u.apply(c.ctx,d):u.apply(l,d))&&(o.preventDefault(),o.stopPropagation())}})};var f=v._event;v._target.addEventListener?v._target.addEventListener(d(f),v._listener,!1):console.warn("invalid eventer object",v._target)}},remove:function(n,t){var i,r;(t=e.mixin({},t)).ns&&(r=t.ns,i=new RegExp("(?:^| )"+r.replace(" "," .* ?")+"(?: |$)")),this._bindings=this._bindings.filter(function(e){return!((!n||n===e.fn)&&(!i||i.test(e.options.ns))&&(!t.selector||t.selector==e.options.selector))}),0==this._bindings.length&&(this._target.removeEventListener&&this._target.removeEventListener(d(this._event),this._listener,!1),this._listener=null)}});return i.EventBindings=l});
+//# sourceMappingURL=sourcemaps/event-bindings.js.map

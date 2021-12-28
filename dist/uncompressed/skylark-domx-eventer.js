@@ -87,24 +87,25 @@
 })(function(define,require) {
 
 define('skylark-domx-eventer/eventer',[
-    "skylark-langx/skylark",
-    "skylark-langx/langx",
-    "skylark-domx-browser",
-    "skylark-domx-finder",
-    "skylark-domx-noder",
-    "skylark-domx-data"
-], function(skylark, langx, browser, finder, noder, datax) {
-    var mixin = langx.mixin,
-        each = langx.each,
-        slice = Array.prototype.slice,
-        uid = langx.uid,
-        ignoreProperties = /^([A-Z]|returnValue$|layer[XY]$)/,
-        eventMethods = {
-            preventDefault: "isDefaultPrevented",
-            stopImmediatePropagation: "isImmediatePropagationStopped",
-            stopPropagation: "isPropagationStopped"
-        },
-        readyRE = /complete|loaded|interactive/;
+    "skylark-langx/skylark"
+], function(skylark) {
+
+
+    function eventer() {
+        return eventer;
+    }
+
+    return skylark.attach("domx.eventer",eventer);
+});
+define('skylark-domx-eventer/compatible',[
+	"skylark-langx",
+	"./eventer"
+],function(langx,eventer){
+    var eventMethods = {
+        preventDefault: "isDefaultPrevented",
+        stopImmediatePropagation: "isImmediatePropagationStopped",
+        stopPropagation: "isPropagationStopped"
+    };
 
     function compatible(event, source) {
         if (source || !event.isDefaultPrevented) {
@@ -124,6 +125,213 @@ define('skylark-domx-eventer/eventer',[
         return event;
     }
 
+
+    return eventer.compatible = compatible;
+});
+define('skylark-domx-eventer/proxy',[
+	"skylark-langx",
+	"./eventer",
+    "./compatible"
+],function(langx,eventer,compatible){
+    var  ignoreProperties = /^([A-Z]|returnValue$|layer[XY]$)/;
+
+    function createProxy(src, props) {
+        var key,
+            proxy = {
+                originalEvent: src
+            };
+        for (key in src) {
+            if (key !== "keyIdentifier" && !ignoreProperties.test(key) && src[key] !== undefined) {
+                proxy[key] = src[key];
+            }
+        }
+        if (props) {
+            langx.mixin(proxy, props);
+        }
+        return compatible(proxy, src);
+    }
+
+    return eventer.proxy = createProxy;
+});
+define('skylark-domx-eventer/event-bindings',[
+	"skylark-langx",
+    "skylark-domx-finder",
+    "skylark-domx-noder",
+	"./eventer",
+    "./proxy"
+],function(langx,finder,noder,eventer,proxy){
+    var focusinSupported = "onfocusin" in window,
+        focus = { focus: "focusin", blur: "focusout" },
+        hover = { mouseenter: "mouseover", mouseleave: "mouseout" },
+        realEvent = function(type) {
+            return hover[type] || (focusinSupported && focus[type]) || type;
+        };
+
+    var    EventBindings = langx.klass({
+        init: function(target, event) {
+            this._target = target;
+            this._event = event;
+            this._bindings = [];
+        },
+
+        add: function(fn, options) {
+            var bindings = this._bindings,
+                binding = {
+                    fn: fn,
+                    options: langx.mixin({}, options)
+                };
+
+            bindings.push(binding);
+
+            var self = this;
+            if (!self._listener) {
+                self._listener = function(domEvt) {
+                    var elm = this,
+                        e = proxy(domEvt),
+                        args = domEvt._args,
+                        bindings = self._bindings,
+                        ns = e.namespace;
+
+                    if (langx.isDefined(args)) {
+                        args = [e].concat(args);
+                    } else {
+                        args = [e];
+                    }
+
+                    e.type = self._event; // convert realEvent to listened event
+
+                    langx.each(bindings, function(idx, binding) {
+                        var match = elm;
+                        if (e.isImmediatePropagationStopped && e.isImmediatePropagationStopped()) {
+                            return false;
+                        }
+                        var fn = binding.fn,
+                            options = binding.options || {},
+                            selector = options.selector,
+                            one = options.one,
+                            data = options.data;
+
+                        if (ns && ns != options.ns && options.ns.indexOf(ns) === -1) {
+                            return;
+                        }
+                        if (selector) {
+                            match = finder.closest(e.target, selector);
+                            if (match && match !== elm) {
+                                langx.mixin(e, {
+                                    currentTarget: match,
+                                    liveFired: elm
+                                });
+                            } else {
+                                return;
+                            }
+                        }
+
+                        var originalEvent = self._event;
+                        if (originalEvent in hover) {
+                            var related = e.relatedTarget;
+                            if (related && (related === match || noder.contains(match, related))) {
+                                return;
+                            }
+                        }
+
+                        if (langx.isDefined(data)) {
+                            e.data = data;
+                        }
+
+                        if (one) {
+                            self.remove(fn, options);
+                        }
+
+                        var result ;
+                        if (fn.handleEvent) {
+                            result = fn.handleEvent.apply(fn,args);
+                        } else {
+                            if (options.ctx) {
+                                result = fn.apply(options.ctx, args);                                   
+                            } else {
+                                result = fn.apply(match, args);                                   
+                            }
+                        }
+
+                        if (result === false) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                    });;
+                };
+
+                var event = self._event;
+                /*
+                                    if (event in hover) {
+                                        var l = self._listener;
+                                        self._listener = function(e) {
+                                            var related = e.relatedTarget;
+                                            if (!related || (related !== this && !noder.contains(this, related))) {
+                                                return l.apply(this, arguments);
+                                            }
+                                        }
+                                    }
+                */
+
+                if (self._target.addEventListener) {
+                    self._target.addEventListener(realEvent(event), self._listener, false);
+                } else {
+                    console.warn("invalid eventer object", self._target);
+                }
+            }
+
+        },
+        remove: function(fn, options) {
+            options = langx.mixin({}, options);
+
+            function matcherFor(ns) {
+                return new RegExp("(?:^| )" + ns.replace(" ", " .* ?") + "(?: |$)");
+            }
+            var matcher;
+            if (options.ns) {
+                matcher = matcherFor(options.ns);
+            }
+
+            this._bindings = this._bindings.filter(function(binding) {
+                var removing = (!fn || fn === binding.fn) &&
+                    (!matcher || matcher.test(binding.options.ns)) &&
+                    (!options.selector || options.selector == binding.options.selector);
+
+                return !removing;
+            });
+            if (this._bindings.length == 0) {
+                if (this._target.removeEventListener) {
+                    this._target.removeEventListener(realEvent(this._event), this._listener, false);
+                }
+                this._listener = null;
+            }
+        }
+    });
+
+    return eventer.EventBindings = EventBindings;
+});
+define('skylark-domx-eventer/special-events',[
+	"skylark-langx",
+    "skylark-domx-browser",
+	"./eventer"
+],function(langx,browser,eventer){
+
+    var  specialEvents = {};
+
+    if (browser.support.transition) {
+        specialEvents.transitionEnd = {
+//          handle: function (e) {
+//            if ($(e.target).is(this)) return e.handleObj.handler.apply(this, arguments)
+//          },
+          bindType: browser.support.transition.end,
+          delegateType: browser.support.transition.end
+        }        
+    }
+
+
+    return eventer.specialEvents = specialEvents;
+});
+define('skylark-domx-eventer/parse',[],function(){
     function parse(event) {
         if (event) {
             var segs = ("" + event).split(".");
@@ -139,9 +347,117 @@ define('skylark-domx-eventer/eventer',[
         }
     }
 
-    function isHandler(callback) {
-        return callback && (langx.isFunction(callback) || langx.isFunction(callback.handleEvent));
+    return parse;	
+});
+define('skylark-domx-eventer/events-handler',[
+	"skylark-langx",
+	"./eventer",
+    "./event-bindings",
+    "./special-events",
+    "./parse"
+],function(langx,eventer,EventBindings,specialEvents,parse){
+    var    EventsHandler = langx.klass({
+        init: function(elm) {
+            this._target = elm;
+            this._handler = {};
+        },
+
+        // add a event listener
+        // selector Optional
+        register: function(event, callback, options) {
+            // Seperate the event from the namespace
+            var parsed = parse(event),
+                event = parsed.type,
+                specialEvent = specialEvents[event],
+                bindingEvent = specialEvent && (specialEvent.bindType || specialEvent.bindEventName);
+
+            var events = this._handler;
+
+            // Check if there is already a handler for this event
+            if (events[event] === undefined) {
+                events[event] = new EventBindings(this._target, bindingEvent || event);
+            }
+
+            // Register the new callback function
+            events[event].add(callback, langx.mixin({
+                ns: parsed.ns
+            }, options)); // options:{selector:xxx}
+        },
+
+        // remove a event listener
+        unregister: function(event, fn, options) {
+            // Check for parameter validtiy
+            var events = this._handler,
+                parsed = parse(event);
+            event = parsed.type;
+
+            if (event) {
+                var listener = events[event];
+
+                if (listener) {
+                    listener.remove(fn, langx.mixin({
+                        ns: parsed.ns
+                    }, options));
+                }
+            } else {
+                //remove all events
+                for (event in events) {
+                    var listener = events[event];
+                    listener.remove(fn, langx.mixin({
+                        ns: parsed.ns
+                    }, options));
+                }
+            }
+        }
+    });
+
+
+    return eventer.EventsHandler = EventsHandler;
+});
+define('skylark-domx-eventer/find-handler',[
+	"skylark-langx",
+	"./eventer",
+    "./events-handler"
+],function(langx,eventer,EventsHandler){
+    var handlers = {};
+
+    function findHandler(elm) {
+        var id = langx.uid(elm),
+            handler = handlers[id];
+        if (!handler) {
+            handler = handlers[id] = new EventsHandler(elm);
+        }
+        return handler;
+    };
+
+
+    return eventer.findHandler = findHandler;
+});
+define('skylark-domx-eventer/clear',[
+	"skylark-langx",
+	"./eventer",
+    "./find-handler"
+],function(langx,eventer,findHandler){
+
+    /*   
+     * Remove all event handlers from the specified element.
+     * @param {HTMLElement} elm  
+     */
+    function clear(elm) {
+        var handler = findHandler(elm);
+
+        handler.unregister();
+
+        return this;
     }
+
+
+    return eventer.clear = clear;
+});
+define('skylark-domx-eventer/native-event-ctors',[
+	"skylark-langx",
+	"./eventer"
+],function(langx,eventer){
 
     var NativeEventCtors = [
             window["CustomEvent"], // 0 default
@@ -161,8 +477,17 @@ define('skylark-domx-eventer/eventer',[
             window["UIEvent"], // 14
             window["WheelEvent"], // 15
             window["ClipboardEvent"] // 16
-        ],
-        NativeEvents = {
+        ];
+
+
+    return eventer.NativeEventCtors = NativeEventCtors;
+});
+define('skylark-domx-eventer/native-events',[
+	"skylark-langx",
+	"./eventer"
+],function(langx,eventer){
+
+    var NativeEvents = {
             "compositionstart": 1, // CompositionEvent
             "compositionend": 1, // CompositionEvent
             "compositionupdate": 1, // CompositionEvent
@@ -259,6 +584,18 @@ define('skylark-domx-eventer/eventer',[
 
         };
 
+
+    return eventer.NativeEvents = NativeEvents;
+});
+define('skylark-domx-eventer/create',[
+	"skylark-langx",
+	"./eventer",
+    "./native-event-ctors",
+    "./native-events",
+    "./parse",
+    "./compatible"
+],function(langx,eventer,NativeEventCtors,NativeEvents,parse,compatible){
+
     //create a custom dom event
     var createEvent = (function() {
 
@@ -300,247 +637,49 @@ define('skylark-domx-eventer/eventer',[
         };
     })();
 
-    function createProxy(src, props) {
-        var key,
-            proxy = {
-                originalEvent: src
-            };
-        for (key in src) {
-            if (key !== "keyIdentifier" && !ignoreProperties.test(key) && src[key] !== undefined) {
-                proxy[key] = src[key];
-            }
-        }
-        if (props) {
-            langx.mixin(proxy, props);
-        }
-        return compatible(proxy, src);
-    }
-
-    var
-        specialEvents = {},
-        focusinSupported = "onfocusin" in window,
-        focus = { focus: "focusin", blur: "focusout" },
-        hover = { mouseenter: "mouseover", mouseleave: "mouseout" },
-        realEvent = function(type) {
-            return hover[type] || (focusinSupported && focus[type]) || type;
-        },
-        handlers = {},
-        EventBindings = langx.klass({
-            init: function(target, event) {
-                this._target = target;
-                this._event = event;
-                this._bindings = [];
-            },
-
-            add: function(fn, options) {
-                var bindings = this._bindings,
-                    binding = {
-                        fn: fn,
-                        options: langx.mixin({}, options)
-                    };
-
-                bindings.push(binding);
-
-                var self = this;
-                if (!self._listener) {
-                    self._listener = function(domEvt) {
-                        var elm = this,
-                            e = createProxy(domEvt),
-                            args = domEvt._args,
-                            bindings = self._bindings,
-                            ns = e.namespace;
-
-                        if (langx.isDefined(args)) {
-                            args = [e].concat(args);
-                        } else {
-                            args = [e];
-                        }
-
-                        e.type = self._event; // convert realEvent to listened event
-
-                        langx.each(bindings, function(idx, binding) {
-                            var match = elm;
-                            if (e.isImmediatePropagationStopped && e.isImmediatePropagationStopped()) {
-                                return false;
-                            }
-                            var fn = binding.fn,
-                                options = binding.options || {},
-                                selector = options.selector,
-                                one = options.one,
-                                data = options.data;
-
-                            if (ns && ns != options.ns && options.ns.indexOf(ns) === -1) {
-                                return;
-                            }
-                            if (selector) {
-                                match = finder.closest(e.target, selector);
-                                if (match && match !== elm) {
-                                    langx.mixin(e, {
-                                        currentTarget: match,
-                                        liveFired: elm
-                                    });
-                                } else {
-                                    return;
-                                }
-                            }
-
-                            var originalEvent = self._event;
-                            if (originalEvent in hover) {
-                                var related = e.relatedTarget;
-                                if (related && (related === match || noder.contains(match, related))) {
-                                    return;
-                                }
-                            }
-
-                            if (langx.isDefined(data)) {
-                                e.data = data;
-                            }
-
-                            if (one) {
-                                self.remove(fn, options);
-                            }
-
-                            var result ;
-                            if (fn.handleEvent) {
-                                result = fn.handleEvent.apply(fn,args);
-                            } else {
-                                if (options.ctx) {
-                                    result = fn.apply(options.ctx, args);                                   
-                                } else {
-                                    result = fn.apply(match, args);                                   
-                                }
-                            }
-
-                            if (result === false) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                            }
-                        });;
-                    };
-
-                    var event = self._event;
-                    /*
-                                        if (event in hover) {
-                                            var l = self._listener;
-                                            self._listener = function(e) {
-                                                var related = e.relatedTarget;
-                                                if (!related || (related !== this && !noder.contains(this, related))) {
-                                                    return l.apply(this, arguments);
-                                                }
-                                            }
-                                        }
-                    */
-
-                    if (self._target.addEventListener) {
-                        self._target.addEventListener(realEvent(event), self._listener, false);
-                    } else {
-                        console.warn("invalid eventer object", self._target);
-                    }
-                }
-
-            },
-            remove: function(fn, options) {
-                options = langx.mixin({}, options);
-
-                function matcherFor(ns) {
-                    return new RegExp("(?:^| )" + ns.replace(" ", " .* ?") + "(?: |$)");
-                }
-                var matcher;
-                if (options.ns) {
-                    matcher = matcherFor(options.ns);
-                }
-
-                this._bindings = this._bindings.filter(function(binding) {
-                    var removing = (!fn || fn === binding.fn) &&
-                        (!matcher || matcher.test(binding.options.ns)) &&
-                        (!options.selector || options.selector == binding.options.selector);
-
-                    return !removing;
-                });
-                if (this._bindings.length == 0) {
-                    if (this._target.removeEventListener) {
-                        this._target.removeEventListener(realEvent(this._event), this._listener, false);
-                    }
-                    this._listener = null;
-                }
-            }
-        }),
-        EventsHandler = langx.klass({
-            init: function(elm) {
-                this._target = elm;
-                this._handler = {};
-            },
-
-            // add a event listener
-            // selector Optional
-            register: function(event, callback, options) {
-                // Seperate the event from the namespace
-                var parsed = parse(event),
-                    event = parsed.type,
-                    specialEvent = specialEvents[event],
-                    bindingEvent = specialEvent && (specialEvent.bindType || specialEvent.bindEventName);
-
-                var events = this._handler;
-
-                // Check if there is already a handler for this event
-                if (events[event] === undefined) {
-                    events[event] = new EventBindings(this._target, bindingEvent || event);
-                }
-
-                // Register the new callback function
-                events[event].add(callback, langx.mixin({
-                    ns: parsed.ns
-                }, options)); // options:{selector:xxx}
-            },
-
-            // remove a event listener
-            unregister: function(event, fn, options) {
-                // Check for parameter validtiy
-                var events = this._handler,
-                    parsed = parse(event);
-                event = parsed.type;
-
-                if (event) {
-                    var listener = events[event];
-
-                    if (listener) {
-                        listener.remove(fn, langx.mixin({
-                            ns: parsed.ns
-                        }, options));
-                    }
-                } else {
-                    //remove all events
-                    for (event in events) {
-                        var listener = events[event];
-                        listener.remove(fn, langx.mixin({
-                            ns: parsed.ns
-                        }, options));
-                    }
-                }
-            }
-        }),
-
-        findHandler = function(elm) {
-            var id = uid(elm),
-                handler = handlers[id];
-            if (!handler) {
-                handler = handlers[id] = new EventsHandler(elm);
-            }
-            return handler;
-        };
-
+    return eventer.create = createEvent;
+});
+define('skylark-domx-eventer/trigger',[
+	"skylark-langx",
+	"./eventer",
+    "./create"
+],function(langx,eventer,createEvent){
 
     /*   
-     * Remove all event handlers from the specified element.
-     * @param {HTMLElement} elm  
+     * Execute all handlers and behaviors attached to the matched elements for the given event  
+     * @param {String} evented
+     * @param {String} type
+     * @param {Array or PlainObject } args
      */
-    function clear(elm) {
-        var handler = findHandler(elm);
+    function trigger(evented, type, args) {
+        var e;
+        if (type instanceof Event) {
+            e = type;
+        } else {
+            e = createEvent(type, args);
+        }
+        e._args = args;
 
-        handler.unregister();
+        var fn = (evented.dispatchEvent || evented.trigger);
+        if (fn) {
+            fn.call(evented, e);
+        } else {
+            console.warn("The evented parameter is not a eventable object");
+        }
 
         return this;
     }
+
+
+
+
+    return eventer.trigger = trigger;
+});
+define('skylark-domx-eventer/focused',[
+	"skylark-langx",
+	"./eventer",
+    "./trigger"
+],function(langx,eventer,trigger){
 
     var focusedQueue = [],
         focuser = langx.loop(function(){
@@ -558,6 +697,72 @@ define('skylark-domx-eventer/eventer',[
             focusedQueue.push(elm)
         }
     }
+
+    return eventer.focused = focused;
+});
+define('skylark-domx-eventer/is-native-event',[
+	"skylark-langx",
+	"./eventer",
+    "./native-events"
+],function(langx,eventer,NativeEvents){
+    function isNativeEvent(events) {
+        if (langx.isString(events)) {
+            return !!NativeEvents[events];
+        } else if (langx.isArray(events)) {
+            for (var i=0; i<events.length; i++) {
+                if (NativeEvents[events]) {
+                    return false;
+                }
+            }
+            return events.length > 0;
+        }
+    }
+
+    return eventer.isNativeEvent = isNativeEvent;
+});
+define('skylark-domx-eventer/keys',[
+	"skylark-langx",
+	"./eventer"
+],function(langx,eventer){
+    var keyCodeLookup = {
+        "backspace": 8,
+        "comma": 188,
+        "delete": 46,
+        "down": 40,
+        "end": 35,
+        "enter": 13,
+        "escape": 27,
+        "home": 36,
+        "left": 37,
+        "page_down": 34,
+        "page_up": 33,
+        "period": 190,
+        "right": 39,
+        "space": 32,
+        "tab": 9,
+        "up": 38
+    };
+
+    return eventer.keys = keyCodeLookup;
+});
+define('skylark-domx-eventer/is-handler',[
+	"skylark-langx",
+	"./eventer"
+],function(langx,eventer){
+
+    function isHandler(callback) {
+        return callback && (langx.isFunction(callback) || langx.isFunction(callback.handleEvent));
+    }
+
+
+    return isHandler;
+});
+define('skylark-domx-eventer/off',[
+	"skylark-langx",
+	"./eventer",
+    "./find-handler",
+    "./is-handler"
+],function(langx,eventer,findHandler,isHandler){
 
     /*   
      * Remove an event handler for one or more events from the specified element.
@@ -602,6 +807,17 @@ define('skylark-domx-eventer/eventer',[
         });
         return this;
     }
+
+    return eventer.off = off;
+});
+define('skylark-domx-eventer/on',[
+    "skylark-langx",
+    "./eventer",
+    "./find-handler",
+    "./is-handler"
+],function(langx,eventer,findHandler,isHandler){
+
+
 
     /*   
      * Attach an event handler function for one or more events to the selected elements.
@@ -669,6 +885,16 @@ define('skylark-domx-eventer/eventer',[
         return this;
     }
 
+
+
+    return eventer.on = on;
+});
+define('skylark-domx-eventer/one',[
+	"skylark-langx",
+	"./eventer",
+    "./on"
+],function(langx,eventer,on){
+
     /*   
      * Attach a handler to an event for the elements. The handler is executed at most once per 
      * @param {HTMLElement} elm  
@@ -683,44 +909,15 @@ define('skylark-domx-eventer/eventer',[
         return this;
     }
 
-    /*   
-     * Prevents propagation and clobbers the default action of the passed event. The same as calling event.preventDefault() and event.stopPropagation(). 
-     * @param {String} event
-     */
-    function stop(event) {
-        if (window.document.all) {
-            event.keyCode = 0;
-        }
-        if (event.preventDefault) {
-            event.preventDefault();
-            event.stopPropagation();
-        }
-        return this;
-    }
-    /*   
-     * Execute all handlers and behaviors attached to the matched elements for the given event  
-     * @param {String} evented
-     * @param {String} type
-     * @param {Array or PlainObject } args
-     */
-    function trigger(evented, type, args) {
-        var e;
-        if (type instanceof Event) {
-            e = type;
-        } else {
-            e = createEvent(type, args);
-        }
-        e._args = args;
 
-        var fn = (evented.dispatchEvent || evented.trigger);
-        if (fn) {
-            fn.call(evented, e);
-        } else {
-            console.warn("The evented parameter is not a eventable object");
-        }
+    return eventer.one = one;
+});
+define('skylark-domx-eventer/ready',[
+	"skylark-langx",
+	"./eventer"
+],function(langx,eventer){
+    var   readyRE = /complete|loaded|interactive/;
 
-        return this;
-    }
     /*   
      * Specify a function to execute when the DOM is fully loaded.  
      * @param {Function} callback
@@ -736,6 +933,14 @@ define('skylark-domx-eventer/eventer',[
 
         return this;
     }
+
+    return eventer.ready = ready;
+});
+define('skylark-domx-eventer/resized',[
+	"skylark-langx",
+	"./eventer",
+    "./trigger"
+],function(langx,eventer,trigger){
 
     var resizedQueue = [],
         resizer = langx.loop(function(){
@@ -754,25 +959,15 @@ define('skylark-domx-eventer/eventer',[
         }
     }
 
+    return eventer.resized = resized;
+});
+define('skylark-domx-eventer/shortcuts',[
+	"skylark-langx",
+    "skylark-domx-data",
+	"./eventer",
+    "./keys"
+],function(langx,datax,eventer,keyCodeLookup){
 
-    var keyCodeLookup = {
-        "backspace": 8,
-        "comma": 188,
-        "delete": 46,
-        "down": 40,
-        "end": 35,
-        "enter": 13,
-        "escape": 27,
-        "home": 36,
-        "left": 37,
-        "page_down": 34,
-        "page_up": 33,
-        "period": 190,
-        "right": 39,
-        "space": 32,
-        "tab": 9,
-        "up": 38
-    };
     //example:
     //shortcuts(elm).add("CTRL+ALT+SHIFT+X",function(){console.log("test!")});
     function shortcuts(elm) {
@@ -838,74 +1033,62 @@ define('skylark-domx-eventer/eventer',[
         };
 
     }
+    return eventer.shortcuts = shortcuts;
+});
+define('skylark-domx-eventer/stop',[
+	"skylark-langx",
+	"./eventer"
+],function(langx,eventer){
 
-    if (browser.support.transition) {
-        specialEvents.transitionEnd = {
-//          handle: function (e) {
-//            if ($(e.target).is(this)) return e.handleObj.handler.apply(this, arguments)
-//          },
-          bindType: browser.support.transition.end,
-          delegateType: browser.support.transition.end
-        }        
-    }
-
-    function isNativeEvent(events) {
-        if (langx.isString(events)) {
-            return !!NativeEvents[events];
-        } else if (langx.isArray(events)) {
-            for (var i=0; i<events.length; i++) {
-                if (NativeEvents[events]) {
-                    return false;
-                }
-            }
-            return events.length > 0;
+    /*   
+     * Prevents propagation and clobbers the default action of the passed event. The same as calling event.preventDefault() and event.stopPropagation(). 
+     * @param {String} event
+     */
+    function stop(event) {
+        if (window.document.all) {
+            event.keyCode = 0;
         }
+        if (event.preventDefault) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        return this;
     }
 
+    return eventer.stop = stop;
+});
+define('skylark-domx-eventer/main',[
+    "skylark-langx",
+    "skylark-domx-velm",
+    "skylark-domx-query",
+    "./eventer",
+    "./clear",
+    "./compatible",
+    "./event-bindings",
+    "./events-handler",
+    "./find-handler",
+    "./focused",
+    "./is-native-event",
+    "./keys",
+    "./native-event-ctors",
+    "./native-events",
+    "./off",
+    "./on",
+    "./one",
+    "./proxy",
+    "./ready",
+    "./resized",    
+    "./shortcuts",
+    "./special-events",
+    "./stop",
+    "./trigger"
+],function(langx,velm,$,eventer){
 
-    function eventer() {
-        return eventer;
-    }
 
-    langx.mixin(eventer, {
-        NativeEvents : NativeEvents,
-        
-        clear,
-        
-        create: createEvent,
-
-        focused,
-
-        keys: keyCodeLookup,
-
-        isNativeEvent,
-
-        off: off,
-
-        on: on,
-
-        one: one,
-
-        proxy: createProxy,
-
-        ready: ready,
-
-        resized,
-        
-        shortcuts: shortcuts,
-
-        special: specialEvents,
-
-        stop: stop,
-
-        trigger: trigger
-
-    });
-
-    each(NativeEvents,function(name){
+    langx.each(eventer.NativeEvents,function(name){
         eventer[name] = function(elm,selector,data,callback) {
             if (arguments.length>1) {
-                return this.on(elm,name,selector,data,callback);
+                return eventer.on(elm,name,selector,data,callback);
             } else {
                 if (name == "focus") {
                     if (elm.focus) {
@@ -920,7 +1103,7 @@ define('skylark-domx-eventer/eventer',[
                         elm.click();
                     }
                 } else {
-                    this.trigger(elm,name);
+                    eventer.trigger(elm,name);
                 }
 
                 return this;
@@ -928,14 +1111,6 @@ define('skylark-domx-eventer/eventer',[
         };
     });
 
-    return skylark.attach("domx.eventer",eventer);
-});
-define('skylark-domx-eventer/main',[
-    "skylark-langx/langx",
-    "./eventer",
-    "skylark-domx-velm",
-    "skylark-domx-query"        
-],function(langx,eventer,velm,$){
 
     var delegateMethodNames = [
         "off",
