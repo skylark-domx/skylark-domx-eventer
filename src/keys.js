@@ -21,5 +21,6 @@ define([
         "up": 38
     };
 
+
     return eventer.keys = keyCodeLookup;
 });

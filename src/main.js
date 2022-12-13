@@ -20,7 +20,7 @@ define([
     "./ready",
     "./resized",    
     "./shortcuts",
-    "./special-events",
+    "./special",
     "./stop",
     "./trigger"
 ],function(langx,velm,$,eventer){

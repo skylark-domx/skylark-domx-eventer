@@ -2,7 +2,7 @@ define([
 	"skylark-langx",
 	"./eventer",
     "./event-bindings",
-    "./special-events",
+    "./special",
     "./parse"
 ],function(langx,eventer,EventBindings,specialEvents,parse){
     var    EventsHandler = langx.klass({
